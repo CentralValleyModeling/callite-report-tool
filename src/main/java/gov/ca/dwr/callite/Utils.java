@@ -7,24 +7,18 @@ import java.util.Calendar;
 import java.util.Collections;
 import java.util.Date;
 import java.util.TimeZone;
+import java.util.Iterator;
 
-import vista.db.dss.DSSUtil;
-import vista.report.TSMath;
-import vista.set.Constants;
-import vista.set.DataReference;
-import vista.set.DataSetElement;
-import vista.set.ElementFilter;
-import vista.set.ElementFilterIterator;
-import vista.set.Group;
-import vista.set.MultiIterator;
-import vista.set.Pathname;
-import vista.set.RegularTimeSeries;
-import vista.set.Stats;
-import vista.set.TimeSeries;
-import vista.time.SubTimeFormat;
-import vista.time.Time;
-import vista.time.TimeFactory;
-import vista.time.TimeWindow;
+import hec.heclib.dss.DSSPathname;
+import hec.heclib.dss.HecTimeSeries;
+import hec.io.TimeSeriesContainer;
+import hec.heclib.util.HecTime;
+import hec.heclib.util.Heclib;
+import hec.hecmath.HecMathException;
+import hec.hecmath.TimeSeriesMath;
+import hec.hecmath.functions.*;
+import hec.hecmath.computation.*;
+import hec.data.TimeWindow;
 
 public class Utils {
 	static StringBuffer messages = new StringBuffer();
@@ -41,50 +35,6 @@ public class Utils {
 		return messages.toString();
 	}
 
-	/**
-	 * Retrieves the contents list for a dss file
-	 * 
-	 * @param filename
-	 * @return a handle to the content listing for a dss file
-	 */
-	public static Group opendss(String filename) {
-		return DSSUtil.createGroup("local", filename);
-	}
-
-	/**
-	 * findpath(g,path,exact=1): this returns an array of matching data
-	 * references g is the group returned from opendss function path is the
-	 * dsspathname e.g. '//C6/FLOW-CHANNEL////' exact means that the exact
-	 * string is matched as opposed to the reg. exp.
-	 * 
-	 * @param g
-	 * @param path
-	 * @param exact
-	 * @return
-	 */
-	public static DataReference[] findpath(Group g, String path, boolean exact) {
-		String[] pa = new String[6];
-		for (int i = 0; i < 6; i++) {
-			pa[i] = "";
-		}
-		int i = 0;
-		for (String p : path.trim().split("/")) {
-			if (i == 0) {
-				i++;
-				continue;
-			}
-			if (i >= pa.length) {
-				break;
-			}
-			pa[i - 1] = p;
-			if (exact) {
-				pa[i - 1] = "^" + pa[i - 1] + "$";
-			}
-			i++;
-		}
-		return g.find(pa);
-	}
-
 	public static PathnameMap getPathMapForVarName(String varname,
 			ArrayList<PathnameMap> pathname_maps) {
 		for (PathnameMap x : pathname_maps) {
@@ -94,31 +44,44 @@ public class Utils {
 		}
 		return null;
 	}
+	
+	public static TimeWindow getTimeWindow(String s){
+		HecTime hTime = new HecTime();
+		if (hTime.set(s.split("-")[0].trim()) != 0) return null;
+		Date startTime = hTime.getJavaDate(TimeZone.getDefault().getRawOffset()/60000);
+		if (hTime.set(s.split("-")[1].trim()) != 0) return null;
+		Date endTime = hTime.getJavaDate(TimeZone.getDefault().getRawOffset()/60000);;
+		return new TimeWindow(startTime, true, endTime, true);
+	}
 
-	public static DataReference getReference(Group group, String path,
-			boolean calculate_dts, ArrayList<PathnameMap> pathname_maps,
-			int group_no) {
+	public static TimeSeriesContainer getTSContainer(HecTimeSeries hts, String path_pattern, boolean calculate_dts)
+	{
 		if (calculate_dts) {
 			try {
 				// FIXME: add expression parser to enable any expression
-				String bpart = path.split("/")[2];
+				String bpart = path_pattern.split("/")[2];
 				String[] vars = bpart.split("\\+");
-				DataReference ref = null;
+				TimeSeriesContainer ref = null;
+				TimeSeriesMath mref = new TimeSeriesMath();
+				TimeSeriesMath mxref = new TimeSeriesMath();
 				for (String varname : vars) {
-					DataReference xref = null;
-					String varPath = createPathFromVarname(path, varname);
-					xref = getReference(group, varPath, false, pathname_maps,
-							group_no);
+					TimeSeriesContainer xref = null;
+					String varPath = createPathFromVarname(path_pattern, varname);
+					xref = getTSContainer(hts, varPath, false);
 					if (xref == null) {
 						throw new RuntimeException("Aborting calculation of "
-								+ path + " due to previous path missing");
+								+ path_pattern + " due to previous path missing");
 					}
 					if (ref == null) {
 						ref = xref;
 					} else {
-						ref = ref.__add__(xref);
+						mref.setData(ref);
+						mxref.setData(xref);
+						mref = (TimeSeriesMath) mref.add(mxref);
+						ref = (TimeSeriesContainer) mref.getData();
 					}
 				}
+				ref.fullName = createPathFromVarname(ref.fullName, bpart);
 				return ref;
 			} catch (Exception ex) {
 				Utils.addMessage(ex.getMessage());
@@ -126,18 +89,30 @@ public class Utils {
 			}
 		} else {
 			try {
-				DataReference[] refs = findpath(group, path, false);
-				if (refs == null) {
-					String msg = "No data found for " + group + " and " + path;
-					addMessage(msg);
-					System.err.println(msg);
-					return null;
-				} else {
-					return refs[0];
+				TimeSeriesContainer tsc = new TimeSeriesContainer();
+				DSSPathname searchpath = new DSSPathname(path_pattern);
+				// searchpath.setDPart("");
+				// searchpath.formPathname();
+				if (hts.recordExists(searchpath.toString())){
+					tsc.fullName = path_pattern;
+				    hts.read(tsc, false);
+				    return tsc;
 				}
+				searchpath.setPathname(path_pattern);
+				searchpath.setAPart("*");
+				searchpath.setDPart("*");
+				searchpath.setFPart("*");
+				String[] paths = hts.getCatalog(false, searchpath.toString());
+				searchpath.setPathname(paths[0]);
+				searchpath.setDPart("");
+				tsc.fullName = searchpath.toString();
+				// Utils.getReference(refBase, dssGroupBase, pathMap.pathBase,
+					//	calculate_dts, pathnameMaps, 1);
+				hts.read(tsc, false);
+				return tsc;
 			} catch (Exception ex) {
-				String msg = "Exception while trying to retrieve " + path
-						+ " from " + group;
+				String msg = "Exception while trying to retrieve " + path_pattern
+						+ " from " + hts.DSSFileName();
 				System.err.println(msg);
 				addMessage(msg);
 				return null;
@@ -145,54 +120,60 @@ public class Utils {
 		}
 	}
 
-	private static String createPathFromVarname(String path, String varname) {
+	private static String createPathFromVarname(String path, String varname){
+		return substitutePartIntoPath(path, varname, 2);
+	} 
+	public static String substitutePartIntoPath(String path, String part, int targetIndex) {
 		String[] parts = path.split("/");
-		if (parts.length > 2) {
-			parts[2] = varname;
+		if (parts.length > targetIndex) {
+			parts[targetIndex] = part;
 		}
 		StringBuilder builder = new StringBuilder();
 		for (int i = 0; i < parts.length; i++) {
 			builder.append(parts[i]).append("/");
 		}
+		for (int count = parts.length; count <= targetIndex; count++){
+			if (count == targetIndex)builder.append(part);
+			builder.append("/");
+		}
 		return builder.toString();
 	}
 
-	public static String getUnitsForReference(DataReference ref) {
-		if (ref != null) {
-			return ref.getData().getAttributes().getYUnits();
+	public static String getUnitsForReference(TimeSeriesContainer tsc) {
+		if (tsc != null) {
+			return tsc.units;
 		}
 		return "";
 	}
 
-	public static String getUnits(DataReference ref1, DataReference ref2) {
-		if (ref1 == null) {
-			if (ref2 == null) {
+	public static String getUnits(TimeSeriesContainer tsc1, TimeSeriesContainer tsc2) {
+		if (tsc1 == null) {
+			if (tsc2 == null) {
 				return "";
 			} else {
-				return getUnitsForReference(ref2);
+				return getUnitsForReference(tsc2);
 			}
 		} else {
-			return getUnitsForReference(ref1);
+			return getUnitsForReference(tsc1);
 		}
 	}
 
-	public static String getTypeOfReference(DataReference ref) {
-		if (ref != null) {
-			Pathname p = ref.getPathname();
-			return p.getPart(Pathname.C_PART);
+	public static String getTypeOfReference(TimeSeriesContainer tsc) {
+		if (tsc != null) {
+			return tsc.parameter;
 		}
 		return "";
 	}
 
-	public static String getType(DataReference ref1, DataReference ref2) {
-		if (ref1 == null) {
-			if (ref2 == null) {
+	public static String getType(TimeSeriesContainer tsc1, TimeSeriesContainer tsc2) {
+		if (tsc1 == null) {
+			if (tsc2 == null) {
 				return "";
 			} else {
-				return getTypeOfReference(ref2);
+				return getTypeOfReference(tsc2);
 			}
 		} else {
-			return getTypeOfReference(ref1);
+			return getTypeOfReference(tsc1);
 		}
 	}
 
@@ -204,74 +185,68 @@ public class Utils {
 		return title;
 	}
 
-	public static Date convertToDate(Time time_val) {
-		return new Date(time_val.getDate().getTime()
-				- TimeZone.getDefault().getRawOffset());
+	public static Date convertToDate(HecTime time_val) {
+		return time_val.getJavaDate(TimeZone.getDefault().getRawOffset()/60000);
 	}
 
-	public static MultiIterator buildMultiIterator(TimeSeries[] dsarray,
-			ElementFilter filter) {
-		if (filter == null) {
-			return new MultiIterator(dsarray);
-		} else {
-			return new MultiIterator(dsarray, filter);
-		}
+	public static String extractNameFromReference(TimeSeriesContainer tsc) {
+		return tsc.parameter + " @ " + tsc.location;
 	}
 
-	public static String extractNameFromReference(DataReference ref) {
-		Pathname p = ref.getPathname();
-		return p.getPart(Pathname.C_PART) + " @ " + p.getPart(Pathname.B_PART);
-	}
-
-	public static ArrayList<double[]> buildDataArray(DataReference ref1,
-			DataReference ref2, TimeWindow tw) {
+	public static ArrayList<double[]> buildDataArray(TimeSeriesContainer ref1,
+			TimeSeriesContainer ref2, TimeWindow tw) {
 		ArrayList<double[]> dlist = new ArrayList<double[]>();
 		if (ref1 == null && ref2 == null) {
 			return dlist;
 		}
-		TimeSeries data1 = (TimeSeries) ref1.getData();
-		TimeSeries data2 = (TimeSeries) ref2.getData();
+		HecTime indexTime = new HecTime();
+		indexTime.set(tw.getStartDate(), TimeZone.getDefault().getRawOffset()/60000);
+		int[] times1 = ref1.times;
+		double[] values1 = ref1.values;
+		int[] times2 = ref2.times;
+		double[] values2 = ref2.values;
+		int i1 = 0; int i2 = 0;
 		if (tw != null) {
-			data1 = data1.createSlice(tw);
-			data2 = data2.createSlice(tw);
+			while (i1 < times1.length && times1[i1] < indexTime.value()) i1++;
+			while (i2 < times2.length && times1[i2] < indexTime.value()) i2++;
 		}
-		MultiIterator iterator = buildMultiIterator(new TimeSeries[] { data1,
-				data2 }, Constants.DEFAULT_FLAG_FILTER);
-		while (!iterator.atEnd()) {
-			DataSetElement e = iterator.getElement();
-			Date date = convertToDate(TimeFactory.getInstance().createTime(
-					e.getXString()));
-			dlist.add(new double[] { date.getTime(), e.getX(1), e.getX(2) });
-			iterator.advance();
+		while (i1 < times1.length && i2 < times2.length) {
+			if (times1[i1] == times1[i1]){
+				indexTime.set(times1[i1]);
+				Date date = indexTime.getJavaDate(TimeZone.getDefault().getRawOffset()/60000);
+				dlist.add(new double[] { date.getTime(), values1[i1], values2[i2]});
+				i1++; i2++;}
+			else return dlist;
 		}
 		return dlist;
 	}
 
-	public static ArrayList<Double> sort(DataReference ref,
+	public static ArrayList<Double> sort(TimeSeriesContainer tsc,
 			boolean end_of_sept, TimeWindow tw) {
-		TimeSeries data = (TimeSeries) ref.getData();
+		int i = 0;
+		HecTime indexTime = new HecTime(tw.getStartDate(),TimeZone.getDefault().getRawOffset()/60000);
+		HecTime endTime = new HecTime(tw.getEndDate(),TimeZone.getDefault().getRawOffset()/60000);
 		if (tw != null) {
-			data = data.createSlice(tw);
+			while(tsc.times[i] < indexTime.value()) i++;
 		}
 		ArrayList<Double> dx = new ArrayList<Double>();
-		ElementFilterIterator iter = new ElementFilterIterator(data
-				.getIterator(), Constants.DEFAULT_FLAG_FILTER);
-		while (!iter.atEnd()) {
+		while (i < tsc.numberValues && tsc.times[i] <= endTime.value()) {
+			indexTime.set(tsc.times[i]);
 			if (end_of_sept) {
-				if (iter.getElement().getXString().indexOf("30SEP") >= 0) {
-					dx.add(iter.getElement().getY());
+				if (indexTime.month() == 9 && indexTime.day() == 30) {
+					dx.add(tsc.values[i]);
 				}
 			} else {
-				dx.add(iter.getElement().getY());
+				dx.add(tsc.values[i]);
 			}
-			iter.advance();
+			i++;
 		}
 		Collections.sort(dx);
 		return dx;
 	}
 
-	public static ArrayList<double[]> buildExceedanceArray(DataReference ref1,
-			DataReference ref2, boolean end_of_sept, TimeWindow tw) {
+	public static ArrayList<double[]> buildExceedanceArray(TimeSeriesContainer ref1,
+			TimeSeriesContainer ref2, boolean end_of_sept, TimeWindow tw) {
 		ArrayList<Double> x1 = sort(ref1, end_of_sept, tw);
 		ArrayList<Double> x2 = sort(ref2, end_of_sept, tw);
 		ArrayList<double[]> darray = new ArrayList<double[]>();
@@ -285,37 +260,74 @@ public class Utils {
 		return darray;
 	}
 
-	public static RegularTimeSeries cfs2taf(RegularTimeSeries data) {
-		RegularTimeSeries data_taf = (RegularTimeSeries) TSMath
-				.createCopy(data);
-		TSMath.cfs2taf(data_taf);
-		return data_taf;
+	public static TimeSeriesContainer cfs2taf(TimeSeriesContainer data) {
+		try{
+			TimeSeriesContainer tsc_af = (TimeSeriesContainer) data.clone();
+			TimeSeriesFunctions.transformTimeSeries(data, tsc_af, TimeSeriesMath.VOLUME, false, 0.0d);
+			TimeSeriesMath tsm_af = (new TimeSeriesMath(tsc_af));
+			TimeSeriesMath tsm_taf = (TimeSeriesMath) tsm_af.divide(1000.0);
+			tsm_taf.setUnits("TAF");
+			return (TimeSeriesContainer) tsm_taf.getData();
+		}
+		catch (ComputationException e){return null;}
+		catch (HecMathException e) {return null;}
 	}
 
-	public static double avg(RegularTimeSeries data, TimeWindow tw) {
+	public static double avg(TimeSeriesContainer tsc, TimeWindow tw) {
 		try {
-			return Stats.avg(data.createSlice(tw)) * 12;
+			int i = 0;
+			int valueCount = 0;
+			int missingCount = 0;
+			int lastTimeValue = tsc.endHecTime.value();
+			double valueSum = 0.0d;
+			
+			HecTime indexTime = new HecTime();
+			HecTime endTime = new HecTime();
+			if (tw != null) {
+				indexTime.set(tw.getStartDate(),TimeZone.getDefault().getRawOffset()/60000);
+				endTime.set(tw.getEndDate(),TimeZone.getDefault().getRawOffset()/60000);
+				lastTimeValue = endTime.value();
+				while(tsc.times[i] < indexTime.value()) i++;
+			}
+			while (i < tsc.numberValues){
+				if (tsc.times[i] > lastTimeValue)break;
+				if (tsc.values[i] == Heclib.UNDEFINED_DOUBLE){
+					missingCount += 1;
+					continue;
+				}
+				valueSum += tsc.values[i];
+				valueCount += 1;
+				i++;
+			}
+			if (valueCount > 0)	return (valueSum/valueCount)*12;
+			else return Double.NaN;
 		} catch (Exception ex) {
 			return Double.NaN;
 		}
 	}
 
 	public static String formatTimeWindowAsWaterYear(TimeWindow tw) {
-		SubTimeFormat year_format = new SubTimeFormat("yyyy");
-		return tw.getStartTime().__add__("3MON").format(year_format) + "-"
-				+ tw.getEndTime().__add__("3MON").format(year_format);
+		// SubTimeFormat year_format = new SubTimeFormat("yyyy");
+		Calendar cal = Calendar.getInstance();
+		cal.setTime(tw.getStartDate());
+		cal.add(Calendar.MONTH, 3);
+		String rv = String.valueOf(cal.get(Calendar.YEAR)) + "-";
+		cal.setTime(tw.getEndDate());
+		//cal.add(Calendar.MONTH, 3);
+		rv = rv + String.valueOf(cal.get(Calendar.YEAR));
+		return rv;
 	}
 
-	public static String formatTimeAsYearMonthDay(Time t) {
+	public static String formatTimeAsYearMonthDay(Date d) {
 		Calendar gmtCal = Calendar.getInstance(TimeZone.getTimeZone("GMT"));
-		gmtCal.setTime(t.getDate());
+		gmtCal.setTime(d);
 		return gmtCal.get(Calendar.YEAR) + "," + gmtCal.get(Calendar.MONTH)
 				+ "," + gmtCal.get(Calendar.DATE);
 	}
 
 	public static String formatAsOptionValue(TimeWindow tw) {
-		return formatTimeAsYearMonthDay(tw.getStartTime()) + "-"
-				+ formatTimeAsYearMonthDay(tw.getEndTime());
+		return formatTimeAsYearMonthDay(tw.getStartDate()) + "-"
+				+ formatTimeAsYearMonthDay(tw.getEndDate());
 	}
 
 }

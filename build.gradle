@@ -1,0 +1,37 @@
+
+plugins{                                                                         
+    id 'java'
+}
+compileJava {
+    sourceCompatibility = '1.8'
+    targetCompatibility = '1.8'
+}
+
+
+repositories {
+    maven {
+        // The HEC Public repository where a lot of base dependencies are stored like hec-monolith
+        url 'https://www.hec.usace.army.mil/nexus/repository/maven-public'
+    }
+    mavenCentral()
+}
+
+dependencies {
+    implementation libs.hec.monolith
+    implementation libs.hec.nucleus.metadata
+    implementation 'com.itextpdf:itextpdf:5.5.13.2'
+
+    implementation files('dep-local/jfreechart.jar')
+    implementation files('dep-local/pdf-renderer.jar')
+    implementation files('dep-local/dsm2-input-model.jar')
+    implementation files('dep-local/crimson.jar')
+    implementation files('dep-local/dom4j-1.6.1.jar')
+    implementation files('dep-local/iText.jar')
+    implementation files('dep-local/itext-hyph-xml.jar')
+}
+
+jar {
+    manifest {
+        attributes 'Main-Class': 'gov.ca.dwr.callite.Main'
+    }
+}

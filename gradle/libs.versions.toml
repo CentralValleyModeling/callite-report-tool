@@ -1,0 +1,7 @@
+[versions]
+hec-monolith = "3.3.22"
+hec-nucleus-metadata = "2.0.1"
+
+[libraries]
+hec-monolith = { module = "mil.army.usace.hec:hec-monolith", version.ref = "hec-monolith" }
+hec-nucleus-metadata = { module = "mil.army.usace.hec:hec-nucleus-metadata", version.ref = "hec-nucleus-metadata" }

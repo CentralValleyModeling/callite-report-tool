@@ -11,6 +11,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.TimeZone;
 import java.util.logging.Logger;
 
 import com.lowagie.text.DocumentException;
@@ -19,16 +21,19 @@ import com.lowagie.text.Font;
 import com.lowagie.text.FontFactory;
 import com.lowagie.text.Paragraph;
 
-import vista.set.DataReference;
-import vista.set.Group;
-import vista.set.RegularTimeSeries;
-import vista.time.TimeFactory;
-import vista.time.TimeWindow;
+import hec.heclib.util.HecTime;
+import hec.heclib.dss.*;
+import hec.io.TimeSeriesContainer;
+import hec.data.TimeWindow;
+
+// import wrimsv2.evaluator.CondensedReferenceCacheAndRead;
+// import wrimsv2.evaluator.CondensedReferenceCacheAndRead.CondensedReferenceCache;
 
 /**
  * Generates a report based on the template file instructions
  * 
  * @author psandhu
+ * @author rma-tom
  * 
  */
 public class Report {
@@ -139,17 +144,55 @@ public class Report {
 
 	public void doProcessing() {
 		// open files 1 and file 2 and loop over to plot
-		Group dssGroupBase = Utils.opendss(scalars.get("FILE_BASE"));
-		Group dssGroupAlt = Utils.opendss(scalars.get("FILE_ALT"));
+
+		HecTimeSeries htsBase = new HecTimeSeries(scalars.get("FILE_BASE"));
+		htsBase.setRetrieveAllTimes(true);
+		String[] basePaths = htsBase.getCatalog(false);
+		if (basePaths.length == 0){
+			String msg = "No data available in "
+					+ scalars.get("FILE_BASE");
+			logger.severe(msg);
+			Utils.addMessage(msg);
+			return;}
+		String baseAPart = basePaths[0].split("/")[1];
+		String baseFPart = basePaths[0].split("/")[6];
+		DSSPathname.setDefaultDPart(basePaths[0].split("/")[4]);
+
+		HecTimeSeries htsAlt = new HecTimeSeries(scalars.get("FILE_ALT"));
+		htsAlt.setRetrieveAllTimes(true);
+		String[] altPaths = htsAlt.getCatalog(false);
+		if (altPaths.length == 0){
+			String msg = "No data available in "
+					+ scalars.get("FILE_ALT");
+			logger.severe(msg);
+			Utils.addMessage(msg);
+			return;}
+		String altAPart = altPaths[0].split("/")[1];
+		String altFPart = altPaths[0].split("/")[6];
+
 		ArrayList<TimeWindow> timewindows = new ArrayList<TimeWindow>();
+		HecTime startTime = new HecTime();
+		HecTime endTime = new HecTime();		
 		for (ArrayList<String> values : twValues) {
 			String v = values.get(1).replace("\"", "");
-			timewindows.add(TimeFactory.getInstance().createTimeWindow(v));
+			String[] dateStrings = v.split("-");
+			startTime.set(dateStrings[0]);
+			endTime.set(dateStrings[1]);
+			timewindows.add(new TimeWindow(
+					startTime.getJavaDate(TimeZone.getDefault().getRawOffset()/60000), true,
+					endTime.getJavaDate(TimeZone.getDefault().getRawOffset()/60000),true));
 		}
 		TimeWindow tw = null;
 		if (timewindows.size() > 0) {
-			tw = timewindows.get(0);
+/*			for (TimeWindow win : timewindows){
+				hTime.set(win.getStartDate(),TimeZone.getDefault().getRawOffset()/60000 );
+				if(hTime.lessThan(startTime))startTime.set(hTime);
+				hTime.set(win.getEndDate(),TimeZone.getDefault().getRawOffset()/60000 );
+				if(hTime.greaterThan(endTime))endTime.set(hTime);
+			}
+*/			tw = timewindows.get(0);
 		}
+
 		String output_file = scalars.get("OUTFILE");
 		writer = new ReportPDFWriter();
 		writer.startDocument(output_file);
@@ -157,17 +200,15 @@ public class Report {
 		writer.addTitlePage(String.format("System Water Balance Report: %s vs %s",
 				scalars.get("NAME_ALT"), scalars.get("NAME_BASE")), author);
 		writer.setAuthor(author);
-		if (dssGroupBase == null || dssGroupAlt == null) {
-			String msg = "No data available in either : "
-					+ scalars.get("FILE_BASE") + " or "
-					+ scalars.get("FILE_ALT");
-			logger.severe(msg);
-			Utils.addMessage(msg);
-			return;
-		}
-
-		generateSummaryTable();
+		
+		generateSummaryTable(htsBase, baseAPart, baseFPart,
+				htsAlt, altAPart, altFPart, timewindows);
+		
 		int dataIndex = 0;
+		TimeSeriesContainer tscBase = null;
+		TimeSeriesContainer tscAlt = null;
+		String searchPathBase = "";
+		String searchPathAlt = "";
 		for (PathnameMap pathMap : pathnameMaps) {
 			dataIndex = dataIndex + 1;
 			logger.fine("Working on index: " + dataIndex);
@@ -182,49 +223,56 @@ public class Report {
 			if (pathMap.report_type.endsWith("_post")) {
 				calculate_dts = true;
 			}
-			DataReference refBase = Utils.getReference(dssGroupBase,
-					pathMap.pathBase, calculate_dts, pathnameMaps, 1);
-			DataReference refAlt = Utils.getReference(dssGroupAlt,
-					pathMap.pathAlt, calculate_dts, pathnameMaps, 2);
-			if (refBase == null || refAlt == null) {
+			tscBase = null;
+			tscAlt = null;
+			if (!pathMap.pathAlt.equalsIgnoreCase("ignore")) {
+				searchPathBase = Utils.substitutePartIntoPath(pathMap.pathBase, baseAPart, 1);
+				searchPathBase = Utils.substitutePartIntoPath(searchPathBase, baseFPart, 6);
+				tscBase = Utils.getTSContainer(htsBase, searchPathBase, calculate_dts);
+			}
+			if (!pathMap.pathAlt.equalsIgnoreCase("ignore")) {
+				searchPathAlt = Utils.substitutePartIntoPath(pathMap.pathAlt, altAPart, 1);
+				searchPathAlt = Utils.substitutePartIntoPath(searchPathAlt, altFPart, 6);
+				tscAlt = Utils.getTSContainer(htsAlt, searchPathAlt, calculate_dts);
+			}			if (tscBase == null || tscAlt == null) {
 				continue;
 			}
 			String[] series_name = new String[] { scalars.get("NAME_BASE"),
 					scalars.get("NAME_ALT") };
-			String data_units = Utils.getUnits(refBase, refAlt);
-			String data_type = Utils.getType(refBase, refAlt);
+			String data_units = tscBase.units;
+			String data_type = tscBase.type;
 			if (pathMap.plot) {
 				if (pathMap.report_type.startsWith("average")) {
-					generatePlot(Utils.buildDataArray(refAlt, refBase, tw),
+					generatePlot(Utils.buildDataArray(tscAlt, tscBase, tw),
 							dataIndex, "Average "
 									+ pathMap.var_name.replace("\"", ""),
 							series_name, data_type + "(" + data_units + ")",
 							"Time", PlotType.TIME_SERIES);
 				} else if (pathMap.report_type.startsWith("exceedance")) {
-					generatePlot(Utils.buildExceedanceArray(refAlt, refBase,
+					generatePlot(Utils.buildExceedanceArray(tscAlt, tscBase,
 							pathMap.var_category == "S_SEPT", tw), dataIndex,
 							Utils.getExceedancePlotTitle(pathMap), series_name,
 							data_type + "(" + data_units + ")",
 							"Percent at or above", PlotType.EXCEEDANCE);
 				} else if (pathMap.report_type.startsWith("avg_excd")) {
-					generatePlot(Utils.buildDataArray(refAlt, refBase, tw),
+					generatePlot(Utils.buildDataArray(tscAlt, tscBase, tw),
 							dataIndex, "Average "
 									+ pathMap.var_name.replace("\"", ""),
 							series_name, data_type + "(" + data_units + ")",
 							"Time", PlotType.TIME_SERIES);
-					generatePlot(Utils.buildExceedanceArray(refAlt, refBase,
+					generatePlot(Utils.buildExceedanceArray(tscAlt, tscBase,
 							pathMap.var_category == "S_SEPT", tw), dataIndex,
 							Utils.getExceedancePlotTitle(pathMap), series_name,
 							data_type + "(" + data_units + ")",
 							"Percent at or above", PlotType.EXCEEDANCE);
 				} else if (pathMap.report_type.startsWith("timeseries")) {
-					generatePlot(Utils.buildDataArray(refAlt, refBase, tw),
+					generatePlot(Utils.buildDataArray(tscAlt, tscBase, tw),
 							dataIndex, "Average "
 									+ pathMap.var_name.replace("\"", ""),
 							series_name, data_type + "(" + data_units + ")",
 							"Time", PlotType.TIME_SERIES);
 				} else if (pathMap.report_type.equals("alloc")) {
-					generatePlot(Utils.buildExceedanceArray(refAlt, refBase,
+					generatePlot(Utils.buildExceedanceArray(tscAlt, tscBase,
 							true, tw), dataIndex, "Exceedance "
 							+ pathMap.var_name.replace("\"", ""), series_name,
 							"Allocation (%)", "Probability",
@@ -235,32 +283,40 @@ public class Report {
 		writer.endDocument();
 	}
 
-	private void generateSummaryTable() {
-		
-		writer.setTableFontSize(scalars.get("TABLE_FONT_SIZE"));
-		
-		
+	private void generateSummaryTable(
+			HecTimeSeries htsBase,
+			String baseAPart,
+			String baseFPart,
+			HecTimeSeries htsAlt,
+			String altAPart,
+			String altFPart,
+			ArrayList<TimeWindow> timewindows)
+	{		
+		writer.setTableFontSize(scalars.get("TABLE_FONT_SIZE"));		
 		writer.addTableTitle(String.format("System Flow Comparision: %s vs %s",
 				scalars.get("NAME_ALT"), scalars.get("NAME_BASE")));
 		writer.addTableSubTitle(scalars.get("NOTE").replace("\"", ""));
 		writer.addTableSubTitle(scalars.get("ASSUMPTIONS").replace("\"", ""));
 		writer.addTableSubTitle(" ");  // add empty line to increase space between title and table
-		Group dssGroupBase = Utils.opendss(scalars.get("FILE_BASE"));
-		Group dssGroupAlt = Utils.opendss(scalars.get("FILE_ALT"));
-		ArrayList<TimeWindow> timewindows = new ArrayList<TimeWindow>();
-		for (ArrayList<String> values : twValues) {
-			String v = values.get(1).replace("\"", "");
-			timewindows.add(TimeFactory.getInstance().createTimeWindow(v));
-		}
+
 		ArrayList<String> headerRow = new ArrayList<String>();
 		headerRow.add("");
 		ArrayList<String> headerRow2 = new ArrayList<String>();
 		headerRow2.add("");
+		
+/*		HecTime hTime = new HecTime(), startTime = new HecTime(), endTime = new HecTime();
+		hTime.set(timewindows.get(0).getStartDate(),TimeZone.getDefault().getRawOffset()/60000);
+		startTime.set(timewindows.get(0).getEndDate(),TimeZone.getDefault().getRawOffset()/60000);
+		endTime.set(timewindows.get(0).getStartDate(),TimeZone.getDefault().getRawOffset()/60000);*/
 
 		for (TimeWindow tw : timewindows) {
 			headerRow.add(Utils.formatTimeWindowAsWaterYear(tw));
 			headerRow2.addAll(Arrays.asList(scalars.get("NAME_ALT"), scalars
-					.get("NAME_BASE"), "Diff", "% Diff"));
+					.get("NAME_BASE"), "Diff", "% Diff"));/*
+			hTime.set(tw.getStartDate(),TimeZone.getDefault().getRawOffset()/60000 );
+			if(hTime.lessThan(startTime))startTime.set(hTime);
+			hTime.set(tw.getEndDate(),TimeZone.getDefault().getRawOffset()/60000 );
+			if(hTime.greaterThan(endTime))endTime.set(hTime);*/
 		}
 		int[] columnSpans = new int[timewindows.size() + 1];
 		columnSpans[0] = 1;
@@ -282,33 +338,34 @@ public class Report {
 			if (pathMap.report_type.toLowerCase().endsWith("_post")) {
 				calculate_dts = true;
 			}
-			DataReference refBase = null, refAlt = null;
+			TimeSeriesContainer tscBase = null, tscAlt = null;
+			String searchpath = null;
+			
 			if (!pathMap.pathBase.equalsIgnoreCase("ignore")) {
-				refBase = Utils.getReference(dssGroupBase, pathMap.pathBase,
-						calculate_dts, pathnameMaps, 1);
+				searchpath = Utils.substitutePartIntoPath(pathMap.pathBase, baseAPart, 1);
+				searchpath = Utils.substitutePartIntoPath(searchpath, baseFPart, 6);
+				tscBase = Utils.getTSContainer(htsBase, searchpath, calculate_dts);
 			}
 			if (!pathMap.pathAlt.equalsIgnoreCase("ignore")) {
-				refAlt = Utils.getReference(dssGroupAlt, pathMap.pathAlt,
-						calculate_dts, pathnameMaps, 2);
+				searchpath = Utils.substitutePartIntoPath(pathMap.pathAlt, altAPart, 1);
+				searchpath = Utils.substitutePartIntoPath(searchpath, altFPart, 6);
+				tscAlt = Utils.getTSContainer(htsAlt, searchpath, calculate_dts);
 			}
 			for (TimeWindow tw : timewindows) {
 				double avgBase = 0, avgAlt = 0;
-				if (refAlt != null) {
-					avgAlt = Utils.avg(Utils.cfs2taf((RegularTimeSeries) refAlt
-							.getData()), tw);
+				if (tscAlt != null) {
+					avgAlt = Utils.avg(Utils.cfs2taf(tscAlt), tw);
 					rowData.add(formatDoubleValue(avgAlt));
 				} else {
 					rowData.add("");
 				}
-				if (refBase != null) {
-					avgBase = Utils
-							.avg(Utils.cfs2taf((RegularTimeSeries) refBase
-									.getData()), tw);
+				if (tscBase != null) {
+					avgBase = Utils.avg(Utils.cfs2taf(tscBase), tw);
 					rowData.add(formatDoubleValue(avgBase));
 				} else {
 					rowData.add("");
 				}
-				if (refBase == null || refAlt == null) {
+				if (tscBase == null || tscAlt == null) {
 					rowData.add("");
 					rowData.add("");
 				} else {

@@ -22,10 +22,12 @@ public class Batch {
 			}
 			
 			System.out.println("Done!\n");
+			System.exit(0);
 
 		}
 		catch (Exception ex) {
 			// ignore
+			System.exit(1);
 		}
 
 	}
