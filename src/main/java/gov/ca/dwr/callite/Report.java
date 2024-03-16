@@ -145,6 +145,7 @@ public class Report {
 	public void doProcessing() {
 		// open files 1 and file 2 and loop over to plot
 
+		HecTimeSeries.setMessageLevel(3);
 		HecTimeSeries htsBase = new HecTimeSeries(scalars.get("FILE_BASE"));
 		htsBase.setRetrieveAllTimes(true);
 		String[] basePaths = htsBase.getCatalog(false);
@@ -240,7 +241,7 @@ public class Report {
 			String[] series_name = new String[] { scalars.get("NAME_BASE"),
 					scalars.get("NAME_ALT") };
 			String data_units = tscBase.units;
-			String data_type = tscBase.type;
+			String data_type = tscBase.parameter;
 			if (pathMap.plot) {
 				if (pathMap.report_type.startsWith("average")) {
 					generatePlot(Utils.buildDataArray(tscAlt, tscBase, tw),
