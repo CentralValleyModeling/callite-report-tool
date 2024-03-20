@@ -2,6 +2,7 @@
 plugins{                                                                         
     id 'java'
     id 'application'
+    id "com.palantir.git-version" version "3.0.0"
     id 'distribution'
 }
 compileJava {
@@ -16,20 +17,38 @@ repositories {
         // The HEC Public repository where a lot of base dependencies are stored like hec-monolith
         url 'https://www.hec.usace.army.mil/nexus/repository/maven-public'
     }
+    maven {
+        // GitHub package repository for the DWR Enhanced Post Processing Tool
+        url 'https://maven.pkg.github.com/CentralValleyModeling/DWR-Enhanced-Post-Processing-Tool'
+        credentials {
+            username = project.findProperty("user-id")// ?: System.getenv('PKG_UID')
+            password = project.findProperty("password ")// ?: System.getenv('PKG_PWD')
+        }
+    }
     mavenCentral()
 }
+
+def versionLabel(gitInfo) {
+    def branch = gitInfo.branchName // all branches are snapshots, only tags get released
+    def tag = gitInfo.lastTag
+    // tag is returned as is. Branch may need cleanup
+    return branch == null ? tag : branch.replace("/","-") + "-SNAPSHOT"
+}
+
+group = 'gov.ca.dwr'
+version = versionLabel(versionDetails())
 
 dependencies {
     implementation libs.hec.monolith
     implementation libs.hec.nucleus.metadata
-    implementation 'org.swinglabs:pdf-renderer:1.0.5'
-    implementation 'dom4j:dom4j:1.6.1'
-    implementation 'crimson:crimson:1.1.3'
-    // implementation 'org.jfree:jfreechart:1.5.4'
-    implementation files('dep-local/jfreechart.jar')
-    implementation files('dep-local/dsm2-input-model.jar')
-    implementation files('dep-local/iText.jar')
-    implementation files('dep-local/itext-hyph-xml.jar')
+    implementation libs.pdf.renderer
+    implementation libs.dom4j
+    implementation libs.crimson
+    implementation libs.jfreechart
+    implementation libs.jcommon
+    implementation libs.itextpdf
+    implementation libs.itexthyphxml
+    implementation libs.dsm2inputmodel
     runtimeOnly 'mil.army.usace.hec:javaHeclib:7-IS-2-win-x86_64@zip'
 }
 
@@ -40,6 +59,7 @@ task extractDll(type: Copy) {
 }
 startScripts {
     doLast {
+        unixScript.text = "# Unix version not available"
         windowsScript.text = windowsScript.text.replace('set DEFAULT_JVM_OPTS=', 'set DEFAULT_JVM_OPTS=-Djava.library.path=%~dp0\\..\\dll')
     }
 }

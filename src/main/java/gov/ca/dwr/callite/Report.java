@@ -17,11 +17,11 @@ import java.util.Locale;
 import java.util.TimeZone;
 import java.util.logging.Logger;
 
-import com.lowagie.text.DocumentException;
-import com.lowagie.text.Element;
-import com.lowagie.text.Font;
-import com.lowagie.text.FontFactory;
-import com.lowagie.text.Paragraph;
+import com.itextpdf.text.DocumentException;
+import com.itextpdf.text.Element;
+import com.itextpdf.text.Font;
+import com.itextpdf.text.FontFactory;
+import com.itextpdf.text.Paragraph;
 
 import hec.heclib.util.HecTime;
 import hec.heclib.dss.*;
