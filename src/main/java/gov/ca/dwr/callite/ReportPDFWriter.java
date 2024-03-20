@@ -16,37 +16,38 @@ import java.util.logging.Logger;
 import org.jfree.chart.ChartFactory;
 import org.jfree.chart.JFreeChart;
 import org.jfree.chart.axis.ValueAxis;
+import org.jfree.chart.plot.PlotOrientation;
 import org.jfree.chart.plot.XYPlot;
 import org.jfree.chart.renderer.xy.XYStepRenderer;
-import org.jfree.chart.util.RectangleInsets;
+import org.jfree.ui.RectangleInsets;
 import org.jfree.data.time.Month;
 import org.jfree.data.time.TimeSeries;
 import org.jfree.data.time.TimeSeriesCollection;
 import org.jfree.data.xy.DefaultXYDataset;
 
-import com.lowagie.text.Document;
-import com.lowagie.text.DocumentException;
-import com.lowagie.text.Element;
-import com.lowagie.text.Font;
-import com.lowagie.text.FontFactory;
-import com.lowagie.text.HeaderFooter;
-import com.lowagie.text.PageSize;
-import com.lowagie.text.Paragraph;
-import com.lowagie.text.Phrase;
-import com.lowagie.text.Rectangle;
-import com.lowagie.text.pdf.PdfContentByte;
-import com.lowagie.text.pdf.PdfDestination;
-import com.lowagie.text.pdf.PdfOutline;
-import com.lowagie.text.pdf.PdfPCell;
-import com.lowagie.text.pdf.PdfPRow;
-import com.lowagie.text.pdf.PdfPTable;
-import com.lowagie.text.pdf.PdfWriter;
+import com.itextpdf.text.Document;
+import com.itextpdf.text.DocumentException;
+import com.itextpdf.text.Element;
+import com.itextpdf.text.Font;
+import com.itextpdf.text.FontFactory;
+import com.itextpdf.text.BaseColor;
+import com.itextpdf.text.PageSize;
+import com.itextpdf.text.Paragraph;
+import com.itextpdf.text.Phrase;
+import com.itextpdf.text.Rectangle;
+import com.itextpdf.text.pdf.PdfContentByte;
+import com.itextpdf.text.pdf.PdfDestination;
+import com.itextpdf.text.pdf.PdfOutline;
+import com.itextpdf.text.pdf.PdfPCell;
+import com.itextpdf.text.pdf.PdfPRow;
+import com.itextpdf.text.pdf.PdfPTable;
+import com.itextpdf.text.pdf.PdfWriter;
 
 public class ReportPDFWriter implements Writer {
 	Document document;
 	private PdfWriter writer;
 	private PdfPTable summaryTable;
-	private HeaderFooter footer;
+	// private HeaderFooter footer;
 	private Font bigFont;
 	private Font smallFont;
 	private Font subtitleFont;
@@ -110,7 +111,7 @@ public class ReportPDFWriter implements Writer {
 	public void addTitlePage(String compareInfo, String author){
 		document.newPage();
 		try {
-			Paragraph title = new Paragraph("\n\n\n\n"+compareInfo, FontFactory.getFont("Arial", 24, Font.BOLD, Color.BLUE));
+			Paragraph title = new Paragraph("\n\n\n\n"+compareInfo, FontFactory.getFont("Arial", 24, Font.BOLD, BaseColor.BLUE));
 			title.setAlignment(Element.ALIGN_CENTER);
 			document.add(title);
 			Paragraph pauthor = new Paragraph("\n\n"+"Author: "+author, FontFactory.getFont("Arial", 16, Font.BOLD));
@@ -314,7 +315,7 @@ public class ReportPDFWriter implements Writer {
 		}
 
 		final JFreeChart xyLineChart = ChartFactory.createXYLineChart(title,
-				xAxisLabel, yAxisLabel, dataset, true);
+				xAxisLabel, yAxisLabel, dataset, PlotOrientation.HORIZONTAL,true, false, false);
 		XYPlot xyPlot = xyLineChart.getXYPlot();
 		ValueAxis domainAxis = xyPlot.getDomainAxis();
 		domainAxis.setInverted(true);
@@ -343,7 +344,7 @@ public class ReportPDFWriter implements Writer {
 			}
 		}
 		final JFreeChart tsChart = ChartFactory.createTimeSeriesChart(title,
-				xAxisLabel, yAxisLabel, datasets, true);
+				xAxisLabel, yAxisLabel, datasets, true, false, false);
 		XYPlot xyPlot = tsChart.getXYPlot();
 		xyPlot.setRenderer(new XYStepRenderer());
 		xyPlot.setBackgroundPaint(null);
