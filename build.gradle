@@ -21,8 +21,8 @@ repositories {
         // GitHub package repository for the DWR Enhanced Post Processing Tool
         url 'https://maven.pkg.github.com/CentralValleyModeling/DWR-Enhanced-Post-Processing-Tool'
         credentials {
-            username = project.findProperty("user-id")// ?: System.getenv('PKG_UID')
-            password = project.findProperty("password ")// ?: System.getenv('PKG_PWD')
+            username = project.findProperty('user-id') ?: System.getenv('PKG_USERNAME')
+            password = project.findProperty('password') ?: System.getenv('PKG_TOKEN')
         }
     }
     mavenCentral()
