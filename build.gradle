@@ -1,37 +1,77 @@
 
 plugins{                                                                         
     id 'java'
+    id 'application'
+    id "com.palantir.git-version" version "3.0.0"
+    id 'distribution'
 }
 compileJava {
     sourceCompatibility = '1.8'
     targetCompatibility = '1.8'
 }
 
+mainClassName = 'gov.ca.dwr.callite.Main'
 
 repositories {
     maven {
         // The HEC Public repository where a lot of base dependencies are stored like hec-monolith
         url 'https://www.hec.usace.army.mil/nexus/repository/maven-public'
     }
+    maven {
+        // GitHub package repository for the DWR Enhanced Post Processing Tool
+        url 'https://maven.pkg.github.com/CentralValleyModeling/DWR-Enhanced-Post-Processing-Tool'
+        credentials {
+            username = project.findProperty('user-id') ?: System.getenv('PKG_USERNAME')
+            password = project.findProperty('password') ?: System.getenv('PKG_TOKEN')
+        }
+    }
     mavenCentral()
 }
+
+def versionLabel(gitInfo) {
+    def branch = gitInfo.branchName // all branches are snapshots, only tags get released
+    def tag = gitInfo.lastTag
+    // tag is returned as is. Branch may need cleanup
+    return branch == null ? tag : branch.replace("/","-") + "-SNAPSHOT"
+}
+
+group = 'gov.ca.dwr'
+version = versionLabel(versionDetails())
 
 dependencies {
     implementation libs.hec.monolith
     implementation libs.hec.nucleus.metadata
-    implementation 'com.itextpdf:itextpdf:5.5.13.2'
-
-    implementation files('dep-local/jfreechart.jar')
-    implementation files('dep-local/pdf-renderer.jar')
-    implementation files('dep-local/dsm2-input-model.jar')
-    implementation files('dep-local/crimson.jar')
-    implementation files('dep-local/dom4j-1.6.1.jar')
-    implementation files('dep-local/iText.jar')
-    implementation files('dep-local/itext-hyph-xml.jar')
+    implementation libs.pdf.renderer
+    implementation libs.dom4j
+    implementation libs.crimson
+    implementation libs.jfreechart
+    implementation libs.jcommon
+    implementation libs.itextpdf
+    implementation libs.itexthyphxml
+    implementation libs.dsm2inputmodel
+    runtimeOnly 'mil.army.usace.hec:javaHeclib:7-IS-2-win-x86_64@zip'
 }
 
-jar {
-    manifest {
-        attributes 'Main-Class': 'gov.ca.dwr.callite.Main'
+task extractDll(type: Copy) {
+    def zipFile = configurations.runtimeClasspath.find { it.name.endsWith('.zip') }
+    from zipTree(zipFile)
+    into "$buildDir/dll"
+}
+startScripts {
+    doLast {
+        unixScript.text = "# Unix version not available"
+        windowsScript.text = windowsScript.text.replace('set DEFAULT_JVM_OPTS=', 'set DEFAULT_JVM_OPTS=-Djava.library.path=%~dp0\\..\\dll')
     }
 }
+tasks.named('distTar').configure{enabled = false}
+distributions {
+    main {
+        contents {
+            into('dll'){
+                from "$buildDir/dll"
+            }
+        }
+    }
+}
+distZip.dependsOn extractDll
+distTar.dependsOn extractDll

@@ -7,6 +7,8 @@ import gov.ca.dsm2.input.parser.Tables;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -15,11 +17,11 @@ import java.util.Locale;
 import java.util.TimeZone;
 import java.util.logging.Logger;
 
-import com.lowagie.text.DocumentException;
-import com.lowagie.text.Element;
-import com.lowagie.text.Font;
-import com.lowagie.text.FontFactory;
-import com.lowagie.text.Paragraph;
+import com.itextpdf.text.DocumentException;
+import com.itextpdf.text.Element;
+import com.itextpdf.text.Font;
+import com.itextpdf.text.FontFactory;
+import com.itextpdf.text.Paragraph;
 
 import hec.heclib.util.HecTime;
 import hec.heclib.dss.*;
@@ -145,6 +147,7 @@ public class Report {
 	public void doProcessing() {
 		// open files 1 and file 2 and loop over to plot
 
+		HecTimeSeries.setMessageLevel(3);
 		HecTimeSeries htsBase = new HecTimeSeries(scalars.get("FILE_BASE"));
 		htsBase.setRetrieveAllTimes(true);
 		String[] basePaths = htsBase.getCatalog(false);
@@ -184,13 +187,7 @@ public class Report {
 		}
 		TimeWindow tw = null;
 		if (timewindows.size() > 0) {
-/*			for (TimeWindow win : timewindows){
-				hTime.set(win.getStartDate(),TimeZone.getDefault().getRawOffset()/60000 );
-				if(hTime.lessThan(startTime))startTime.set(hTime);
-				hTime.set(win.getEndDate(),TimeZone.getDefault().getRawOffset()/60000 );
-				if(hTime.greaterThan(endTime))endTime.set(hTime);
-			}
-*/			tw = timewindows.get(0);
+			tw = timewindows.get(0);
 		}
 
 		String output_file = scalars.get("OUTFILE");
@@ -240,7 +237,7 @@ public class Report {
 			String[] series_name = new String[] { scalars.get("NAME_BASE"),
 					scalars.get("NAME_ALT") };
 			String data_units = tscBase.units;
-			String data_type = tscBase.type;
+			String data_type = tscBase.parameter;
 			if (pathMap.plot) {
 				if (pathMap.report_type.startsWith("average")) {
 					generatePlot(Utils.buildDataArray(tscAlt, tscBase, tw),
@@ -292,7 +289,12 @@ public class Report {
 			String altFPart,
 			ArrayList<TimeWindow> timewindows)
 	{		
-		writer.setTableFontSize(scalars.get("TABLE_FONT_SIZE"));		
+		if (scalars.containsKey("TABLE_FONT_SIZE"))
+			writer.setTableFontSize(scalars.get("TABLE_FONT_SIZE"));
+		else {
+			writer.setTableFontSize("7");
+			logger.log(java.util.logging.Level.INFO, "TABLE_FONT_SIZE not found in the template file. Using default value 7.");
+		}
 		writer.addTableTitle(String.format("System Flow Comparision: %s vs %s",
 				scalars.get("NAME_ALT"), scalars.get("NAME_BASE")));
 		writer.addTableSubTitle(scalars.get("NOTE").replace("\"", ""));
@@ -312,11 +314,7 @@ public class Report {
 		for (TimeWindow tw : timewindows) {
 			headerRow.add(Utils.formatTimeWindowAsWaterYear(tw));
 			headerRow2.addAll(Arrays.asList(scalars.get("NAME_ALT"), scalars
-					.get("NAME_BASE"), "Diff", "% Diff"));/*
-			hTime.set(tw.getStartDate(),TimeZone.getDefault().getRawOffset()/60000 );
-			if(hTime.lessThan(startTime))startTime.set(hTime);
-			hTime.set(tw.getEndDate(),TimeZone.getDefault().getRawOffset()/60000 );
-			if(hTime.greaterThan(endTime))endTime.set(hTime);*/
+					.get("NAME_BASE"), "Diff", "% Diff"));
 		}
 		int[] columnSpans = new int[timewindows.size() + 1];
 		columnSpans[0] = 1;
