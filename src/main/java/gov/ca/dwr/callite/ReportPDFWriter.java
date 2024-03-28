@@ -315,7 +315,7 @@ public class ReportPDFWriter implements Writer {
 		}
 
 		final JFreeChart xyLineChart = ChartFactory.createXYLineChart(title,
-				xAxisLabel, yAxisLabel, dataset, PlotOrientation.HORIZONTAL,true, false, false);
+				xAxisLabel, yAxisLabel, dataset, PlotOrientation.VERTICAL,true, false, false);
 		XYPlot xyPlot = xyLineChart.getXYPlot();
 		ValueAxis domainAxis = xyPlot.getDomainAxis();
 		domainAxis.setInverted(true);
