@@ -1,17 +1,23 @@
+/*  TODO: Refactor the reporting tools to use a common library of plotting and tabulating functions.*/
+
 package gov.ca.dwr.callite;
 
 import gov.ca.dsm2.input.parser.InputTable;
 import gov.ca.dsm2.input.parser.Parser;
 import gov.ca.dsm2.input.parser.Tables;
+import hec.data.TimeWindow;
+import hec.heclib.dss.DSSPathname;
+import hec.heclib.dss.HecTimeSeries;
+import hec.heclib.util.HecTime;
+import hec.io.TimeSeriesContainer;
 
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.Hashtable;
 import java.util.List;
 import java.util.Locale;
 import java.util.TimeZone;
@@ -22,14 +28,6 @@ import com.itextpdf.text.Element;
 import com.itextpdf.text.Font;
 import com.itextpdf.text.FontFactory;
 import com.itextpdf.text.Paragraph;
-
-import hec.heclib.util.HecTime;
-import hec.heclib.dss.*;
-import hec.io.TimeSeriesContainer;
-import hec.data.TimeWindow;
-
-// import wrimsv2.evaluator.CondensedReferenceCacheAndRead;
-// import wrimsv2.evaluator.CondensedReferenceCacheAndRead.CondensedReferenceCache;
 
 /**
  * Generates a report based on the template file instructions
@@ -138,6 +136,7 @@ public class Report {
 			}
 			path_map.plot = pathnameMappingTable.getValue(i, "PLOT")
 					.equalsIgnoreCase("Y");
+			path_map.units = pathnameMappingTable.getValue(i, "UNIT");
 			pathnameMaps.add(path_map);
 		}
 		InputTable timeWindowTable = tables.getTableNamed("TIME_PERIODS");
@@ -175,7 +174,7 @@ public class Report {
 
 		ArrayList<TimeWindow> timewindows = new ArrayList<TimeWindow>();
 		HecTime startTime = new HecTime();
-		HecTime endTime = new HecTime();		
+		HecTime endTime = new HecTime();
 		for (ArrayList<String> values : twValues) {
 			String v = values.get(1).replace("\"", "");
 			String[] dateStrings = v.split("-");
@@ -236,6 +235,13 @@ public class Report {
 			}
 			String[] series_name = new String[] { scalars.get("NAME_BASE"),
 					scalars.get("NAME_ALT") };
+			if (pathMap.units.equalsIgnoreCase("CFS2TAF")) {
+				tscBase=Utils.cfs2taf(tscBase);
+				tscAlt=Utils.cfs2taf(tscAlt);
+			} else if (pathMap.units.equalsIgnoreCase("TAF2CFS")) {
+				tscBase=Utils.taf2cfs(tscBase);
+				tscAlt=Utils.taf2cfs(tscAlt);
+			}
 			String data_units = tscBase.units;
 			String data_type = tscBase.parameter;
 			if (pathMap.plot) {
@@ -247,7 +253,7 @@ public class Report {
 							"Time", PlotType.TIME_SERIES);
 				} else if (pathMap.report_type.startsWith("exceedance")) {
 					generatePlot(Utils.buildExceedanceArray(tscAlt, tscBase,
-							pathMap.var_category == "S_SEPT", tw), dataIndex,
+							getMonth(pathMap.var_category), tw), dataIndex,
 							Utils.getExceedancePlotTitle(pathMap), series_name,
 							data_type + "(" + data_units + ")",
 							"Percent at or above", PlotType.EXCEEDANCE);
@@ -258,7 +264,7 @@ public class Report {
 							series_name, data_type + "(" + data_units + ")",
 							"Time", PlotType.TIME_SERIES);
 					generatePlot(Utils.buildExceedanceArray(tscAlt, tscBase,
-							pathMap.var_category == "S_SEPT", tw), dataIndex,
+							getMonth(pathMap.var_category), tw), dataIndex,
 							Utils.getExceedancePlotTitle(pathMap), series_name,
 							data_type + "(" + data_units + ")",
 							"Percent at or above", PlotType.EXCEEDANCE);
@@ -270,10 +276,16 @@ public class Report {
 							"Time", PlotType.TIME_SERIES);
 				} else if (pathMap.report_type.equals("alloc")) {
 					generatePlot(Utils.buildExceedanceArray(tscAlt, tscBase,
-							true, tw), dataIndex, "Exceedance "
+							9, tw), dataIndex, "Exceedance "
 							+ pathMap.var_name.replace("\"", ""), series_name,
 							"Allocation (%)", "Probability",
 							PlotType.EXCEEDANCE);
+				} else if (pathMap.report_type.equals("month_avg")){
+					generatePlot(Utils.buildMonthlyAverages(tscAlt, tscBase, tw),
+							dataIndex, "Monthly Average "
+									+ pathMap.var_name.replace("\"", ""),
+							series_name, data_type + "(" + data_units + ")",
+							"Time", PlotType.TIME_SERIES);
 				}
 			}
 		}
@@ -352,13 +364,31 @@ public class Report {
 			for (TimeWindow tw : timewindows) {
 				double avgBase = 0, avgAlt = 0;
 				if (tscAlt != null) {
-					avgAlt = Utils.avg(Utils.cfs2taf(tscAlt), tw);
+					if (pathMap.units.equalsIgnoreCase("TAF2CFS")){
+						avgAlt = Utils.avg(Utils.taf2cfs(tscAlt), tw)/12.0;
+					}else if (pathMap.units.equalsIgnoreCase("CFS2TAF")){
+						avgAlt = Utils.avg(Utils.cfs2taf(tscAlt), tw);
+					}else if (tscAlt.units.equalsIgnoreCase("TAF")){
+						avgAlt = Utils.avg(tscAlt, tw);
+					}else{
+						avgAlt = Utils.avg(tscAlt, tw)/12.0;
+					}
 					rowData.add(formatDoubleValue(avgAlt));
 				} else {
 					rowData.add("");
 				}
 				if (tscBase != null) {
-					avgBase = Utils.avg(Utils.cfs2taf(tscBase), tw);
+					if (pathMap.units.equalsIgnoreCase("TAF2CFS")){
+						avgBase = Utils
+								.avg(Utils.taf2cfs(tscBase), tw)/12.0;
+					}else if(pathMap.units.equalsIgnoreCase("CFS2TAF")){
+						avgBase = Utils
+							.avg(Utils.cfs2taf(tscBase), tw);
+					}else if (tscBase.units.equalsIgnoreCase("TAF")){
+						avgBase = Utils.avg(tscBase, tw);
+					}else{
+						avgBase = Utils.avg(tscBase, tw)/12.0;
+					}
 					rowData.add(formatDoubleValue(avgBase));
 				} else {
 					rowData.add("");
@@ -370,7 +400,7 @@ public class Report {
 					double diff = avgAlt - avgBase;
 					double pctDiff = Double.NaN;
 					if (avgBase != 0) {
-						pctDiff = diff / avgBase * 100;
+						pctDiff = diff / Math.abs(avgBase) * 100;
 					}
 					rowData.add(formatDoubleValue(diff));
 					rowData.add(formatDoubleValue(pctDiff));
@@ -426,9 +456,10 @@ public class Report {
 		String report_type;
 		String pathBase;
 		String pathAlt;
-		String var_category;
-		String var_name;
+		public String var_category;
+		public String var_name;
 		String row_type;
+		String units;
 		boolean plot;
 
 		public PathnameMap(String var_name) {
@@ -438,5 +469,36 @@ public class Report {
 
 	public String getOutputFile() {
 		return scalars.get("OUTFILE");
+	}
+	
+	public int getMonth(String var_category){
+		if (var_category.equalsIgnoreCase("S_Jan")){
+			return 1;
+		}else if (var_category.equalsIgnoreCase("S_Feb")){
+			return 2;
+		}else if (var_category.equalsIgnoreCase("S_Mar")){
+			return 3;
+		}else if (var_category.equalsIgnoreCase("S_Apr")){
+			return 4;
+		}else if (var_category.equalsIgnoreCase("S_May")){
+			return 5;
+		}else if (var_category.equalsIgnoreCase("S_Jun")){
+			return 6;
+		}else if (var_category.equalsIgnoreCase("S_Jul")){
+			return 7;
+		}else if (var_category.equalsIgnoreCase("S_Aug")){
+			return 8;
+		}else if (var_category.equalsIgnoreCase("S_Sep")){
+			return 9;
+		}else if (var_category.equalsIgnoreCase("S_Sept")){
+			return 9;
+		}else if (var_category.equalsIgnoreCase("S_Oct")){
+			return 10;
+		}else if (var_category.equalsIgnoreCase("S_Nov")){
+			return 11;
+		}else if (var_category.equalsIgnoreCase("S_Dec")){
+			return 12;
+		}
+		return 0;
 	}
 }
