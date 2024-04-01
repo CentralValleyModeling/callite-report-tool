@@ -1,3 +1,5 @@
+/*  TODO: Refactor the reporting tools to use a common library of plotting and tabulating functions.*/
+
 package gov.ca.dwr.callite;
 
 import gov.ca.dwr.callite.Report.PathnameMap;
@@ -6,6 +8,7 @@ import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collections;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.TimeZone;
 import java.util.Iterator;
 
@@ -179,8 +182,32 @@ public class Utils {
 
 	public static String getExceedancePlotTitle(PathnameMap path_map) {
 		String title = "Exceedance " + path_map.var_name.replace("\"", "");
-		if (path_map.var_category.equals("S_SEPT")) {
+		if (path_map.var_category.equalsIgnoreCase("S_Jan")) {
+			title = title + " (Jan)";
+		}else if (path_map.var_category.equalsIgnoreCase("S_Feb")) {
+			title = title + " (Feb)";
+		}else if (path_map.var_category.equalsIgnoreCase("S_Mar")) {
+			title = title + " (Mar)";
+		}else if (path_map.var_category.equalsIgnoreCase("S_Apr")) {
+			title = title + " (Apr)";
+		}else if (path_map.var_category.equalsIgnoreCase("S_May")) {
+			title = title + " (May)";
+		}else if (path_map.var_category.equalsIgnoreCase("S_Jun")) {
+			title = title + " (Jun)";
+		}else if (path_map.var_category.equalsIgnoreCase("S_Jul")) {
+			title = title + " (Jul)";
+		}else if (path_map.var_category.equalsIgnoreCase("S_Aug")) {
+			title = title + " (Aug)";
+		}else if (path_map.var_category.equalsIgnoreCase("S_Sep")) {
+			title = title + " (Sep)";
+		}else if (path_map.var_category.equalsIgnoreCase("S_SEPT")) {
 			title = title + " (Sept)";
+		}else if (path_map.var_category.equalsIgnoreCase("S_Oct")) {
+			title = title + " (Oct)";
+		}else if (path_map.var_category.equalsIgnoreCase("S_Nov")) {
+			title = title + " (Nov)";
+		}else if (path_map.var_category.equalsIgnoreCase("S_Dec")) {
+			title = title + " (Dec)";
 		}
 		return title;
 	}
@@ -211,7 +238,7 @@ public class Utils {
 			while (i2 < times2.length && times1[i2] < indexTime.value()) i2++;
 		}
 		while (i1 < times1.length && i2 < times2.length) {
-			if (times1[i1] == times1[i1]){
+			if (times1[i1] == times2[i2]){
 				indexTime.set(times1[i1]);
 				Date date = indexTime.getJavaDate(TimeZone.getDefault().getRawOffset()/60000);
 				dlist.add(new double[] { date.getTime(), values1[i1], values2[i2]});
@@ -221,8 +248,7 @@ public class Utils {
 		return dlist;
 	}
 
-	public static ArrayList<Double> sort(TimeSeriesContainer tsc,
-			boolean end_of_sept, TimeWindow tw) {
+	public static ArrayList<Double> sort(TimeSeriesContainer tsc, int end, TimeWindow tw) {
 		int i = 0;
 		HecTime indexTime = new HecTime(tw.getStartDate(),TimeZone.getDefault().getRawOffset()/60000);
 		HecTime endTime = new HecTime(tw.getEndDate(),TimeZone.getDefault().getRawOffset()/60000);
@@ -232,8 +258,52 @@ public class Utils {
 		ArrayList<Double> dx = new ArrayList<Double>();
 		while (i < tsc.numberValues && tsc.times[i] <= endTime.value()) {
 			indexTime.set(tsc.times[i]);
-			if (end_of_sept) {
+			if (end==1) {
+				if (indexTime.month() == 1 && indexTime.day() == 31) {
+					dx.add(tsc.values[i]);
+				}
+			}else if (end==2) {
+				if (indexTime.month() == 2 && (indexTime.day() == 28 || indexTime.day() == 29)) {
+					dx.add(tsc.values[i]);
+				}
+			}else if (end==3) {
+				if (indexTime.month() == 3 && indexTime.day() == 31) {
+					dx.add(tsc.values[i]);
+				}
+			}else if (end==4) {
+				if (indexTime.month() == 4 && indexTime.day() == 30) {
+					dx.add(tsc.values[i]);
+				}
+			}else if (end==5) {
+				if (indexTime.month() == 5 && indexTime.day() == 31) {
+					dx.add(tsc.values[i]);
+				}
+			}else if (end==6) {
+				if (indexTime.month() == 6 && indexTime.day() == 30) {
+					dx.add(tsc.values[i]);
+				}
+			}else if (end==7) {
+				if (indexTime.month() == 7 && indexTime.day() == 31) {
+					dx.add(tsc.values[i]);
+				}
+			}else if (end==8) {
+				if (indexTime.month() == 8 && indexTime.day() == 31) {
+					dx.add(tsc.values[i]);
+				}
+			}else if (end==9) {
 				if (indexTime.month() == 9 && indexTime.day() == 30) {
+					dx.add(tsc.values[i]);
+				}
+			}else if (end==10) {
+				if (indexTime.month() == 10 && indexTime.day() == 31) {
+					dx.add(tsc.values[i]);
+				}
+			}else if (end==11) {
+				if (indexTime.month() == 11 && indexTime.day() == 30) {
+					dx.add(tsc.values[i]);
+				}
+			}else if (end==12) {
+				if (indexTime.month() == 12 && indexTime.day() == 31) {
 					dx.add(tsc.values[i]);
 				}
 			} else {
@@ -246,9 +316,9 @@ public class Utils {
 	}
 
 	public static ArrayList<double[]> buildExceedanceArray(TimeSeriesContainer ref1,
-			TimeSeriesContainer ref2, boolean end_of_sept, TimeWindow tw) {
-		ArrayList<Double> x1 = sort(ref1, end_of_sept, tw);
-		ArrayList<Double> x2 = sort(ref2, end_of_sept, tw);
+			TimeSeriesContainer ref2, int end_of_month, TimeWindow tw) {
+		ArrayList<Double> x1 = sort(ref1, end_of_month, tw);
+		ArrayList<Double> x2 = sort(ref2, end_of_month, tw);
 		ArrayList<double[]> darray = new ArrayList<double[]>();
 		int i = 0;
 		int n = (int) Math.round(Math.min(x1.size(), x2.size()));
@@ -271,6 +341,21 @@ public class Utils {
 		}
 		catch (ComputationException e){return null;}
 		catch (HecMathException e) {return null;}
+	}
+
+	public static TimeSeriesContainer taf2cfs(TimeSeriesContainer data) {
+		HecTime indexTime = new HecTime();
+		TimeSeriesContainer tsc_cfs = (TimeSeriesContainer) data.clone();
+		for (int i = 0; i < data.numberValues; i++) {
+			indexTime.set(data.times[i]);
+			tsc_cfs.values[i] = data.values[i] * (504.1666667 / indexTime.day());
+		}
+		DSSPathname path_cfs = new DSSPathname(data.fullName);
+		path_cfs.setCPart("FLOW");
+		tsc_cfs.fullName = path_cfs.pathname();
+		tsc_cfs.setUnits("CFS");
+		tsc_cfs.parameter = "FLOW";
+		return tsc_cfs;
 	}
 
 	public static double avg(TimeSeriesContainer tsc, TimeWindow tw) {
@@ -330,4 +415,140 @@ public class Utils {
 				+ formatTimeAsYearMonthDay(tw.getEndDate());
 	}
 
+	public static int monthToInt(String month) {
+
+		HashMap<String, Integer> monthMap = new HashMap<String, Integer>();
+
+		monthMap.put("jan", 1);
+		monthMap.put("feb", 2);
+		monthMap.put("mar", 3);
+		monthMap.put("apr", 4);
+		monthMap.put("may", 5);
+		monthMap.put("jun", 6);
+		monthMap.put("jul", 7);
+		monthMap.put("aug", 8);
+		monthMap.put("sep", 9);
+		monthMap.put("oct", 10);
+		monthMap.put("nov", 11);
+		monthMap.put("dec", 12);
+
+		month = month.toLowerCase();
+		Integer monthCode = null;
+
+		try {
+
+			monthCode = monthMap.get(month);
+
+		}
+
+		catch (Exception e) {
+
+			//log.debug(e.getMessage());
+
+		}
+
+		if (monthCode == null) {
+
+			//log.debug("Invalid Key at UnitsUtils.monthToInt");
+			return -1;
+
+		}
+
+		return monthCode.intValue();
+
+	}
+
+	public static ArrayList<double[]> buildMonthlyAverages(TimeSeriesContainer tsc1, TimeSeriesContainer tsc2, TimeWindow tw) {
+		TimeSeriesContainer tscc1 = (TimeSeriesContainer) tsc1.clone();
+		TimeSeriesContainer tscc2 = (TimeSeriesContainer) tsc2.clone();
+		ArrayList<double[]> dlist = new ArrayList<double[]>();
+		if ((tsc1 == null) && (tsc2 == null)) {
+			return dlist;
+		}
+		if (tw != null) {
+			Date sd = tw.getStartDate();
+			HecTime sdht=new HecTime();
+			Calendar sdc = Calendar.getInstance();
+			sdc.setTime(sd);
+			sdht.set(sdc);
+			Date ed = tw.getEndDate();
+			HecTime edht=new HecTime();
+			Calendar edc = Calendar.getInstance();
+			edc.setTime(ed);
+			edht.set(edc);  
+			tscc1.trimToTime(sdht, edht);
+			tscc2.trimToTime(sdht, edht);
+		}	
+		int[] size1=new int[12];
+		int[] size2=new int[12];
+		double[] avg1=new double[12];
+		double[] avg2=new double[12];
+		for (int i=0; i<12; i++){
+			size1[i]=0;
+			size2[i]=0;
+			avg1[i]=0.0;
+			avg2[i]=0.0;
+		}
+		
+		HecTime st1 = tscc1.startHecTime;
+		int month1 = st1.month();
+		double[] values1 = tscc1.values;
+		for (int i=0; i<values1.length; i++){
+			int index= month1-1;
+			size1[index]=size1[index]+1;
+			avg1[index]=avg1[index]+values1[i];
+			month1=month1+1;
+			if (month1>12) month1=1;
+		}
+		
+		HecTime st2 = tscc2.startHecTime;
+		int month2 = st2.month();
+		double[] values2 = tscc2.values;
+		for (int i=0; i<values2.length; i++){
+			int index= month2-1;
+			size2[index]=size2[index]+1;
+			avg2[index]=avg2[index]+values2[i];
+			month2=month2+1;
+			if (month2>12) month2=1;
+		}
+		
+		for (int i=9; i<12; i++){
+			Date dataDate=new Date();
+			int year=st1.year()-1;
+			dataDate.setYear(year-1900);
+			dataDate.setMonth(i);
+			dataDate.setDate(TimeOperation.numberOfDays(i+1, 1900+year));
+			if (size1[i]==0){
+				avg1[i]=0.0;
+			}else{
+				avg1[i]=avg1[i]/size1[i];
+			}
+			if (size2[i]==0){
+				avg2[i]=0.0;
+			}else{
+				avg2[i]=avg2[i]/size2[i];
+			}
+			dlist.add(new double[] { dataDate.getTime(), avg1[i], avg2[i] });
+		}
+		
+		for (int i=0; i<9; i++){
+			Date dataDate=new Date();
+			int year=st1.year();
+			dataDate.setYear(year-1900);
+			dataDate.setMonth(i);
+			dataDate.setDate(TimeOperation.numberOfDays(i+1, 1900+year));
+			if (size1[i]==0){
+				avg1[i]=0.0;
+			}else{
+				avg1[i]=avg1[i]/size1[i];
+			}
+			if (size2[i]==0){
+				avg2[i]=0.0;
+			}else{
+				avg2[i]=avg2[i]/size2[i];
+			}
+			dlist.add(new double[] { dataDate.getTime(), avg1[i], avg2[i] });
+		}
+		return dlist;
+	}
 }
