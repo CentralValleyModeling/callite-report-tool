@@ -6,8 +6,27 @@ publishing {
     repositories {
         maven {
             credentials {
-                username = project.findProperty('user-id') ?: System.getenv("PKG_USERNAME")
-                password = project.findProperty('password') ?: System.getenv("PKG_TOKEN")
+                def tryUser = project.findProperty('cvmUserId')
+                if(tryUser == null) {
+                    tryUser = project.findProperty('user-id')
+                    if(tryUser != null) {
+                        project.logger.warn("The property 'user-id' is deprecated. Please use 'cvmUserId' instead.")
+                    } else {
+                        tryUser = System.getenv("PKG_USERNAME")
+                    }
+                }
+                username = tryUser
+
+                def tryPassword = project.findProperty('cvmPassword')
+                if(tryPassword == null) {
+                    tryPassword = project.findProperty('password')
+                    if(tryPassword != null) {
+                        project.logger.warn("The property 'password' is deprecated. Please use 'cvmPassword' instead.")
+                    } else {
+                        tryPassword = System.getenv("PKG_TOKEN")
+                    }
+                }
+                password = tryPassword
             }
             url = "https://maven.pkg.github.com/CentralValleyModeling/system-summary-report-tool/"
         }
