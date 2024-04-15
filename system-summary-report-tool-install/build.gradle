@@ -24,9 +24,7 @@ startScripts {
     }
 }
 
-tasks.named("run").configure {
-    mainClassName = 'gov.ca.dwr.callite.Main'
-}
+mainClassName = 'gov.ca.dwr.callite.Main'
 
 tasks.named('distTar').configure { enabled = false }
 distributions {
@@ -37,6 +35,10 @@ distributions {
             }
         }
     }
+}
+
+tasks.withType(Jar).configureEach {
+    enabled = false
 }
 
 distZip.dependsOn extractDll
