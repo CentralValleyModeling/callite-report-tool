@@ -18,6 +18,7 @@ task extractDll(type: Copy) {
 }
 
 startScripts {
+    applicationName = 'system-summary-report-tool'
     doLast {
         unixScript.text = "# Unix version not available"
         windowsScript.text = windowsScript.text.replace('set DEFAULT_JVM_OPTS=', 'set DEFAULT_JVM_OPTS=-Djava.library.path=%~dp0\\..\\dll')
