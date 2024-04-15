@@ -1,13 +1,6 @@
-
 plugins{
-    id 'ssrt.deps-conventions'
-    id 'ssrt.java-conventions'
-    id 'application'
     id "com.palantir.git-version" version "3.0.0"
-    id 'distribution'
 }
-
-mainClassName = 'gov.ca.dwr.callite.Main'
 
 def versionLabel(gitInfo) {
     def branch = gitInfo.branchName // all branches are snapshots, only tags get released
@@ -16,43 +9,7 @@ def versionLabel(gitInfo) {
     return branch == null ? tag : branch.replace("/","-") + "-SNAPSHOT"
 }
 
-group = 'gov.ca.dwr'
-version = versionLabel(versionDetails())
-
-dependencies {
-    implementation libs.hec.monolith
-    implementation libs.hec.nucleus.metadata
-    implementation libs.pdf.renderer
-    implementation libs.dom4j
-    implementation libs.crimson
-    implementation libs.jfreechart
-    implementation libs.jcommon
-    implementation libs.itextpdf
-    implementation libs.itexthyphxml
-    implementation libs.dsm2inputmodel
-    runtimeOnly 'mil.army.usace.hec:javaHeclib:7-IS-2-win-x86_64@zip'
+allprojects {
+    group = 'gov.ca.dwr'
+    version = versionLabel(versionDetails())
 }
-
-task extractDll(type: Copy) {
-    def zipFile = configurations.runtimeClasspath.find { it.name.endsWith('.zip') }
-    from zipTree(zipFile)
-    into "$buildDir/dll"
-}
-startScripts {
-    doLast {
-        unixScript.text = "# Unix version not available"
-        windowsScript.text = windowsScript.text.replace('set DEFAULT_JVM_OPTS=', 'set DEFAULT_JVM_OPTS=-Djava.library.path=%~dp0\\..\\dll')
-    }
-}
-tasks.named('distTar').configure{enabled = false}
-distributions {
-    main {
-        contents {
-            into('dll'){
-                from "$buildDir/dll"
-            }
-        }
-    }
-}
-distZip.dependsOn extractDll
-distTar.dependsOn extractDll

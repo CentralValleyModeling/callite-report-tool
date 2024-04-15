@@ -1,0 +1,4 @@
+rootProject.name = 'system-summary-report-tool-parent'
+
+include(':system-summary-report-tool')
+include(':system-summary-report-tool-install')
