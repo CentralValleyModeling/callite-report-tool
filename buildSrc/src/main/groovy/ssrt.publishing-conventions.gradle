@@ -1,0 +1,15 @@
+plugins {
+    id 'maven-publish'
+}
+
+publishing {
+    repositories {
+        maven {
+            credentials {
+                username = project.findProperty('user-id') ?: System.getenv("PKG_USERNAME")
+                password = project.findProperty('password') ?: System.getenv("PKG_TOKEN")
+            }
+            url = "https://maven.pkg.github.com/CentralValleyModeling/system-summary-report-tool/"
+        }
+    }
+}

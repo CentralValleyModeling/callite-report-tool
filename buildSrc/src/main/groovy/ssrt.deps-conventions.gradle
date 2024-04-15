@@ -1,0 +1,15 @@
+repositories {
+    maven {
+        // The HEC Public repository where a lot of base dependencies are stored like hec-monolith
+        url 'https://www.hec.usace.army.mil/nexus/repository/maven-public'
+    }
+    maven {
+        // GitHub package repository for the DWR Enhanced Post Processing Tool
+        url 'https://maven.pkg.github.com/CentralValleyModeling/DWR-Enhanced-Post-Processing-Tool'
+        credentials {
+            username = project.findProperty('user-id') ?: System.getenv('PKG_USERNAME')
+            password = project.findProperty('password') ?: System.getenv('PKG_TOKEN')
+        }
+    }
+    mavenCentral()
+}

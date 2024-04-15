@@ -1,32 +1,13 @@
 
-plugins{                                                                         
-    id 'java'
+plugins{
+    id 'ssrt.deps-conventions'
+    id 'ssrt.java-conventions'
     id 'application'
     id "com.palantir.git-version" version "3.0.0"
     id 'distribution'
 }
-compileJava {
-    sourceCompatibility = '1.8'
-    targetCompatibility = '1.8'
-}
 
 mainClassName = 'gov.ca.dwr.callite.Main'
-
-repositories {
-    maven {
-        // The HEC Public repository where a lot of base dependencies are stored like hec-monolith
-        url 'https://www.hec.usace.army.mil/nexus/repository/maven-public'
-    }
-    maven {
-        // GitHub package repository for the DWR Enhanced Post Processing Tool
-        url 'https://maven.pkg.github.com/CentralValleyModeling/DWR-Enhanced-Post-Processing-Tool'
-        credentials {
-            username = project.findProperty('user-id') ?: System.getenv('PKG_USERNAME')
-            password = project.findProperty('password') ?: System.getenv('PKG_TOKEN')
-        }
-    }
-    mavenCentral()
-}
 
 def versionLabel(gitInfo) {
     def branch = gitInfo.branchName // all branches are snapshots, only tags get released
