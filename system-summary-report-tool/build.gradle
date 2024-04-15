@@ -17,3 +17,11 @@ dependencies {
     implementation libs.dsm2inputmodel
     runtimeOnly 'mil.army.usace.hec:javaHeclib:7-IS-2-win-x86_64@zip'
 }
+
+publishing {
+    publications {
+        maven(MavenPublication) {
+            from components.java
+        }
+    }
+}
